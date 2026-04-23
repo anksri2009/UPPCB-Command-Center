@@ -23,10 +23,11 @@ st.markdown("""
     .terminal { background-color: #f8fafc; color: #334155; font-family: 'Courier New', monospace; padding: 15px; border-radius: 5px; border: 1px solid #cbd5e1; border-left: 4px solid #3b82f6; font-size: 0.85rem; height: 180px; overflow-y: auto;}
     .legal-notice { background-color: #ffffff; color: #000000; padding: 30px; font-family: 'Times New Roman', serif; border: 1px solid #94a3b8; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); border-top: 8px solid #0f172a; border-radius: 4px; }
     .waste-metric { font-size: 1.5rem; font-weight: bold; }
+    .telemetry-box { background: #ffffff; padding: 15px; border-radius: 6px; border: 1px solid #e2e8f0; border-left: 4px solid #0ea5e9; margin-bottom: 10px;}
     </style>
 """, unsafe_allow_html=True)
 
-# --- 2. DATA GENERATION (170 STPs, 25 BMWs, and ~200 HCFs) ---
+# --- 2. DATA GENERATION (170 STPs, 25 BMWs, and HCFs) ---
 @st.cache_data
 def load_full_infrastructure():
     # Anchor Facilities
@@ -47,14 +48,12 @@ def load_full_infrastructure():
         "Ayodhya": (26.79, 82.19), "Mirzapur": (25.14, 82.56)
     }
     
-    # Pad STPs to 170
     current_stps = len([d for d in data if d["Type"] == "STP"])
     for i in range(current_stps + 1, 171):
         dist, coords = random.choice(list(up_districts.items()))
         stat = np.random.choice(["Compliant", "Warning", "Critical"], p=[0.75, 0.15, 0.10])
         data.append({"ID": f"STP-{dist[:3].upper()}-{i}", "Type": "STP", "Name": f"{dist} Jal Nigam STP {i}", "District": dist, "Capacity": random.randint(5, 60), "Lat": coords[0]+random.uniform(-0.3,0.3), "Lon": coords[1]+random.uniform(-0.3,0.3), "Status": stat})
     
-    # Pad BMWs to 25
     current_bmws = len([d for d in data if d["Type"] == "BMW"])
     for i in range(current_bmws + 1, 26):
         dist, coords = random.choice(list(up_districts.items()))
@@ -71,21 +70,19 @@ def generate_hcf_network(bmw_df):
     hcf_types = ["District Hospital", "City Care Clinic", "Pathology Lab", "Surgical Centre", "Maternity Home"]
     
     for idx, bmw in bmw_df.iterrows():
-        num_hcfs = random.randint(6, 15) # Generate 6 to 15 hospitals per CBWTF
+        num_hcfs = random.randint(6, 15)
         for i in range(num_hcfs):
             h_type = random.choice(hcf_types)
             base_lat, base_lon = bmw['Lat'], bmw['Lon']
             
-            # Scatter HCFs within a ~15-30km radius of the BMW plant
             lat = base_lat + random.uniform(-0.15, 0.15)
             lon = base_lon + random.uniform(-0.15, 0.15)
             
-            # Generate daily waste in kg
             scale = 5.0 if "Hospital" in h_type else 1.0
-            yellow = round(random.uniform(10, 50) * scale, 1) # Anatomical/Infectious
-            red = round(random.uniform(8, 40) * scale, 1)     # Plastics/Tubing
-            white = round(random.uniform(1, 10) * scale, 1)   # Sharps/Needles
-            blue = round(random.uniform(2, 15) * scale, 1)    # Glassware
+            yellow = round(random.uniform(10, 50) * scale, 1) 
+            red = round(random.uniform(8, 40) * scale, 1)     
+            white = round(random.uniform(1, 10) * scale, 1)   
+            blue = round(random.uniform(2, 15) * scale, 1)    
             
             hcf_data.append({
                 "HCF_ID": f"HCF-{bmw['District'][:3].upper()}-{idx}-{i}",
@@ -108,7 +105,6 @@ with st.sidebar:
     st.caption("Central Command | HCF Network Edition")
     st.markdown("---")
     
-    # Global Search
     search_query = st.text_input("🔍 Global Facility Search", placeholder="Enter Name or ID...")
     
     st.markdown("---")
@@ -119,7 +115,6 @@ with st.sidebar:
         "⚖️ Enforcement Desk"
     ])
 
-# Filter dataframe based on search
 display_df = df
 if search_query:
     display_df = df[df['Name'].str.contains(search_query, case=False, na=False) | 
@@ -159,12 +154,24 @@ elif module == "💧 STP Command Node":
         
         st.markdown(f"**Uplink Established:** `{node['ID']}` | **Processing Load:** `{node['Capacity']} MLD` | **Compliance:** <span style='color:{node['Color']}; font-weight:bold;'>{node['Status'].upper()}</span>", unsafe_allow_html=True)
         
+        # --- THE FULL OCEMS MATRIX FOR STP ---
+        st.markdown("### Live OCEMS Effluent Parameters")
+        current_bod = random.randint(35, 55) if node['Status'] == 'Critical' else random.randint(18, 28)
+        current_cod = random.randint(260, 310) if node['Status'] == 'Critical' else random.randint(110, 180)
+        current_tss = random.randint(110, 150) if node['Status'] == 'Critical' else random.randint(40, 80)
+        current_ph = round(random.uniform(9.5, 10.5), 1) if node['Status'] == 'Critical' else round(random.uniform(7.2, 8.1), 1)
+
+        p1, p2, p3, p4 = st.columns(4)
+        p1.markdown(f"<div class='telemetry-box'><small>pH Level (Limit: 6.5 - 9.0)</small><br><span style='font-size:24px; font-weight:bold; color:{'#dc2626' if current_ph > 9.0 else '#16a34a'}'>{current_ph}</span></div>", unsafe_allow_html=True)
+        p2.markdown(f"<div class='telemetry-box'><small>BOD (Limit: < 30 mg/l)</small><br><span style='font-size:24px; font-weight:bold; color:{'#dc2626' if current_bod > 30 else '#16a34a'}'>{current_bod}</span></div>", unsafe_allow_html=True)
+        p3.markdown(f"<div class='telemetry-box'><small>COD (Limit: < 250 mg/l)</small><br><span style='font-size:24px; font-weight:bold; color:{'#dc2626' if current_cod > 250 else '#16a34a'}'>{current_cod}</span></div>", unsafe_allow_html=True)
+        p4.markdown(f"<div class='telemetry-box'><small>TSS (Limit: < 100 mg/l)</small><br><span style='font-size:24px; font-weight:bold; color:{'#dc2626' if current_tss > 100 else '#16a34a'}'>{current_tss}</span></div>", unsafe_allow_html=True)
+
         c1, c2, c3 = st.columns([1, 1, 1.5])
         with c1:
-            st.subheader("Live Effluent Quality (BOD)")
-            current_bod = 45 if node['Status'] == 'Critical' else random.randint(18, 28)
+            st.subheader("Biological Digestion")
             fig_gauge = go.Figure(go.Indicator(
-                mode = "gauge+number", value = current_bod, title = {'text': "BOD (mg/l)"},
+                mode = "gauge+number", value = current_bod, title = {'text': "BOD Current"},
                 gauge = {'axis': {'range': [None, 100]}, 'bar': {'color': "#0f172a"},
                          'steps': [{'range': [0, 30], 'color': "#dcfce7"}, {'range': [30, 100], 'color': "#fee2e2"}],
                          'threshold': {'line': {'color': "red", 'width': 4}, 'thickness': 0.75, 'value': 30}}
@@ -194,17 +201,29 @@ elif module == "🏥 BMW & HCF Command Node":
         target = st.selectbox("Select Core CBWTF Node:", bmw_df["Name"].tolist())
         node = bmw_df[bmw_df["Name"] == target].iloc[0]
         
-        # Filter HCFs connected to this BMW
         connected_hcfs = hcf_df[hcf_df["Parent_BMW_ID"] == node["ID"]]
         
         st.markdown(f"**Uplink:** `{node['ID']}` | **Status:** <span style='color:{node['Color']}; font-weight:bold;'>{node['Status'].upper()}</span> | **Connected Healthcare Facilities:** `{len(connected_hcfs)}`", unsafe_allow_html=True)
+        
+        # --- THE FULL OCEMS MATRIX FOR BMW ---
+        st.markdown("### Live OCEMS Stack Emissions & Incineration")
+        current_sec = random.randint(850, 950) if node['Status'] == 'Critical' else random.randint(1050, 1150)
+        current_pri = random.randint(650, 750) if node['Status'] == 'Critical' else random.randint(800, 880)
+        current_co = random.randint(60, 120) if node['Status'] == 'Critical' else random.randint(10, 45)
+        current_pm = random.randint(60, 90) if node['Status'] == 'Critical' else random.randint(20, 45)
+
+        p1, p2, p3, p4 = st.columns(4)
+        p1.markdown(f"<div class='telemetry-box'><small>Primary Temp (Target: > 800°C)</small><br><span style='font-size:24px; font-weight:bold; color:{'#dc2626' if current_pri < 800 else '#16a34a'}'>{current_pri}°C</span></div>", unsafe_allow_html=True)
+        p2.markdown(f"<div class='telemetry-box'><small>Secondary Temp (Target: > 1050°C)</small><br><span style='font-size:24px; font-weight:bold; color:{'#dc2626' if current_sec < 1050 else '#16a34a'}'>{current_sec}°C</span></div>", unsafe_allow_html=True)
+        p3.markdown(f"<div class='telemetry-box'><small>CO Emission (Limit: < 50 mg/Nm³)</small><br><span style='font-size:24px; font-weight:bold; color:{'#dc2626' if current_co > 50 else '#16a34a'}'>{current_co}</span></div>", unsafe_allow_html=True)
+        p4.markdown(f"<div class='telemetry-box'><small>Particulate Matter (Limit: < 50 mg/Nm³)</small><br><span style='font-size:24px; font-weight:bold; color:{'#dc2626' if current_pm > 50 else '#16a34a'}'>{current_pm}</span></div>", unsafe_allow_html=True)
+
         st.markdown("---")
         
         map_col, data_col = st.columns([1.2, 1])
         
         with map_col:
             st.subheader(f"Service Catchment Area")
-            # Create a combined dataframe for the map (The Plant + Its HCFs)
             map_nodes = pd.DataFrame([{"Name": node["Name"], "Lat": node["Lat"], "Lon": node["Lon"], "Role": "Processing Plant (CBWTF)", "Size": 15}])
             hcf_map_nodes = connected_hcfs[["Name", "Lat", "Lon"]].copy()
             hcf_map_nodes["Role"] = "Healthcare Facility (HCF)"
@@ -225,18 +244,17 @@ elif module == "🏥 BMW & HCF Command Node":
             st.markdown(f"**Facility ID:** `{hcf_data['HCF_ID']}`")
             st.markdown(f"**Total Daily Generation:** `{hcf_data['Total_kg']} kg/day`")
             
-            # Color-coded waste breakdown per CPCB guidelines
             st.markdown("#### Waste Segregation Matrix")
             w1, w2 = st.columns(2)
             w1.markdown(f"<div style='background-color:#fef08a; padding:10px; border-radius:5px; margin-bottom:10px; border-left: 5px solid #ca8a04;'>"
-                        f"<b>🟡 YELLOW BAG</b><br><span class='waste-metric'>{hcf_data['Yellow_kg']} kg</span><br><small>Human Anatomical, Infectious</small></div>", unsafe_allow_html=True)
+                        f"<b>🟡 YELLOW BAG</b><br><span class='waste-metric'>{hcf_data['Yellow_kg']} kg</span><br><small>Anatomical, Infectious</small></div>", unsafe_allow_html=True)
             w1.markdown(f"<div style='background-color:#ffffff; padding:10px; border-radius:5px; border: 1px solid #e2e8f0; border-left: 5px solid #94a3b8;'>"
                         f"<b>⚪ WHITE (Translucent)</b><br><span class='waste-metric'>{hcf_data['White_kg']} kg</span><br><small>Sharps, Needles, Scalpels</small></div>", unsafe_allow_html=True)
             
             w2.markdown(f"<div style='background-color:#fecaca; padding:10px; border-radius:5px; margin-bottom:10px; border-left: 5px solid #dc2626;'>"
-                        f"<b>🔴 RED BAG</b><br><span class='waste-metric'>{hcf_data['Red_kg']} kg</span><br><small>Contaminated Plastics, Tubing</small></div>", unsafe_allow_html=True)
+                        f"<b>🔴 RED BAG</b><br><span class='waste-metric'>{hcf_data['Red_kg']} kg</span><br><small>Contaminated Plastics</small></div>", unsafe_allow_html=True)
             w2.markdown(f"<div style='background-color:#bfdbfe; padding:10px; border-radius:5px; border-left: 5px solid #2563eb;'>"
-                        f"<b>🔵 BLUE MARKING</b><br><span class='waste-metric'>{hcf_data['Blue_kg']} kg</span><br><small>Glassware, Metallic Implants</small></div>", unsafe_allow_html=True)
+                        f"<b>🔵 BLUE MARKING</b><br><span class='waste-metric'>{hcf_data['Blue_kg']} kg</span><br><small>Glassware, Implants</small></div>", unsafe_allow_html=True)
 
 # --- 7. MODULE: ENFORCEMENT DESK ---
 elif module == "⚖️ Enforcement Desk":
@@ -257,10 +275,10 @@ elif module == "⚖️ Enforcement Desk":
         with c1:
             st.markdown("### AI Deviation Report")
             if target_data["Type"] == "STP":
-                reason = "BOD effluent continuously exceeding 30 mg/l limit for the past 72 hours. Serious failure in biological treatment stage."
+                reason = "Effluent parameter violation: BOD and TSS continuously exceeding statutory limits (>30 mg/l and >100 mg/l) for the past 72 hours. Suspected biological treatment failure."
                 act = "Section 33A of the Water (Prevention and Control of Pollution) Act, 1974"
             else:
-                reason = "Secondary incineration chamber temperature recorded severely below 1050°C. Immediate risk of atmospheric Dioxin/Furan emissions."
+                reason = "Stack emission violation: Secondary incineration chamber temperature recorded below 1050°C and PM > 50 mg/Nm³. Immediate risk of Dioxin/Furan release."
                 act = "Section 5 of the Environment (Protection) Act, 1986"
                 
             st.markdown(f"**Facility:** {target_data['Name']} ({target_data['ID']})")
